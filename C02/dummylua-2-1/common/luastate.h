@@ -59,7 +59,7 @@ typedef struct global_State {
     struct lua_State* mainthread;
     lua_Alloc frealloc;
     void* ud;
-    lua_CFunction panic;
+    lua_CFunction panic;//g->panic 是一个回调函数指针，当 Lua 遇到无法处理的错误时，会调用这个回调函数。
 } global_State;
 
 struct lua_State* lua_newstate(lua_Alloc alloc, void* ud);

@@ -45,13 +45,14 @@ void luaD_checkstack(struct lua_State* L, int need) {
     }
 }
 
+
 void luaD_growstack(struct lua_State* L, int size) {
     if (L->stack_size > LUA_MAXSTACK) {
         luaD_throw(L, LUA_ERRERR);
     }
 
     int stack_size = L->stack_size * 2;
-    int need_size = cast(int, L->top - L->stack) + size + LUA_EXTRASTACK;
+    int need_size = ((int)(L->top - L->stack)) + size + LUA_EXTRASTACK;
     if (stack_size < need_size) {
         stack_size = need_size;
     }
@@ -80,6 +81,12 @@ void luaD_growstack(struct lua_State* L, int size) {
     }
 }
 
+
+/**
+@brief 抛出 Lua 异常
+@param L Lua 状态机指针
+@param error 异常代码 
+**/ 
 void luaD_throw(struct lua_State* L, int error) {
     struct global_State* g = G(L);
     if (L->errorjmp) {
@@ -95,9 +102,9 @@ void luaD_throw(struct lua_State* L, int error) {
 }
 
 int luaD_rawrunprotected(struct lua_State* L, Pfunc f, void* ud) {
-    int old_ncalls = L->ncalls;
-    struct lua_longjmp lj;
-    lj.previous = L->errorjmp;
+    int old_ncalls = L->ncalls;//保存当前调用栈的深度，以便将来恢复。
+    struct lua_longjmp lj;//创建一个新的longjmp结构，用于保存错误处理信息。
+    lj.previous = L->errorjmp;//
     lj.status = LUA_OK;
     L->errorjmp = &lj;
 
@@ -107,43 +114,62 @@ int luaD_rawrunprotected(struct lua_State* L, Pfunc f, void* ud) {
         (*f)(L, ud);
     )
 
-    L->errorjmp = lj.previous;
-    L->ncalls = old_ncalls;
+    L->errorjmp = lj.previous;//如果函数f成功运行，则将longjmp结构从错误处理栈中移除，
+    L->ncalls = old_ncalls;//恢复之前保存的调用栈深度
     return lj.status;
 }
 
+/**
+@brief 获取下一个CallInfo结构体。
+此函数用于获取给定lua_State、函数和结果数量的下一个CallInfo结构体。
+在Lua中，每次函数调用都会创建一个新的CallInfo对象，并将其添加到调用栈中。这个函数用于创建新的CallInfo对象，并将其添加到调用栈中。
+@param L 要获取下一个CallInfo结构体的lua_State。
+@param func 要获取下一个CallInfo结构体的函数。
+@param nresult 下一个CallInfo结构体的结果数量。
+@return 返回指向下一个CallInfo结构体的指针。 
+**/
 static struct CallInfo* next_ci(struct lua_State* L, StkId func, int nresult) {
     struct global_State* g = G(L);
-    struct CallInfo* ci;
+    struct CallInfo* ci;//创建一个新的CallInfo对象,CallInfo结构体是用于协调Lua函数调用过程的数据结构。
     ci = luaM_realloc(L, NULL, 0, sizeof(struct CallInfo));
-    ci->next = NULL;
+    ci->next = NULL;//将其插入到当前lua_State的CallInfo链表中
     ci->previous = L->ci;
     L->ci->next = ci;
     ci->nresult = nresult;
     ci->callstatus = LUA_OK;
     ci->func = func;
-    ci->top = L->top + LUA_MINSTACK;
-    L->ci = ci;
+    ci->top = L->top + LUA_MINSTACK;//将当前函数的栈顶指针 ci->top 设置为 L->top 向上增加 LUA_MINSTACK 的位置，以确保函数运行时有足够的栈空间。
+    L->ci = ci;//将其设置为当前活动的CallInfo对象，并返回其指针。
 
     return ci;
 }
 
-// prepare for function call. 
-// if we call a c function, just directly call it
-// if we call a lua function, just prepare for call it
+/**
+
+@brief 在 Lua 虚拟机中执行函数调用。
+该函数首先根据函数类型进行判断，如果是 C 函数类型，则将函数指针取出，保存函数在栈中的位置，并为栈分配一个最小的 Lua 栈空间（LUA_MINSTACK）。
+然后调用 next_ci 函数来设置新的 CallInfo，将函数指针和结果数量作为参数。
+接着调用 C 函数执行，将返回值数量保存为 n。
+最后，调用 luaD_poscall 函数以完成函数调用过程，并返回 1。
+如果函数类型不是 C 函数，则直接返回 0。
+@param L 要执行函数调用的 lua_State。
+@param func 要调用的函数在栈中的位置。
+@param nresult 调用函数后期望返回的结果数量。
+@return 如果是 C 函数类型，返回 1；否则返回 0。 
+**/
 int luaD_precall(struct lua_State* L, StkId func, int nresult) {
     switch(func->tt_) {
-        case LUA_TLCF: {
-            lua_CFunction f = func->value_.f;
+        case LUA_TLCF: {//如果是 C 函数类型
+            lua_CFunction f = func->value_.f;//将函数指针取出
 
-            ptrdiff_t func_diff = savestack(L, func);
-            luaD_checkstack(L, LUA_MINSTACK);
+            ptrdiff_t func_diff = savestack(L, func);//保存函数在栈中的位置,savestack 和 restorestack 函数用于在栈上保存和恢复值的位置.
+            luaD_checkstack(L, LUA_MINSTACK);//并为栈分配一个最小的 Lua 栈空间（LUA_MINSTACK）
             func = restorestack(L, func_diff);
 
-            next_ci(L, func, nresult);                        
-            int n = (*f)(L);
+            next_ci(L, func, nresult);  //设置新的 CallInfo，将函数指针和结果数量作为参数。                      
+            int n = (*f)(L);//调用 C 函数执行，将返回值数量保存为 n。
             assert(L->ci->func + n <= L->ci->top);
-            luaD_poscall(L, L->top - n, n);
+            luaD_poscall(L, L->top - n, n);//完成函数调用过程，并返回 1。
             return 1; 
         } break;
         default:break;
@@ -152,19 +178,29 @@ int luaD_precall(struct lua_State* L, StkId func, int nresult) {
     return 0;
 }
 
-int luaD_poscall(struct lua_State* L, StkId first_result, int nresult) {
-    StkId func = L->ci->func;
-    int nwant = L->ci->nresult;
+/**
 
-    switch(nwant) {
+@brief 执行函数调用后的操作，处理 Lua 函数的返回结果和错误。
+在 Lua 函数返回后，该函数会处理返回结果和可能发生的错误。
+@param L Lua 状态。
+@param first_result 函数调用的第一个返回结果（在栈顶）。
+@param nresult 函数返回结果的数量。 
+**/
+int luaD_poscall(struct lua_State* L, StkId first_result, int nresult) {
+    StkId func = L->ci->func;//首先获取当前函数在栈中的位置
+    int nwant = L->ci->nresult;//获取当前函数期望的返回结果数量
+
+    switch(nwant) {//根据 函数期望的返回结果数量 的不同情况进行分支判断：
         case 0: {
-            L->top = L->ci->func;
+            L->top = L->ci->func;//将栈顶指针 L->top 指向当前函数的位置。
         } break;
         case 1: {
             if (nresult == 0) {
                 first_result->value_.p = NULL;
                 first_result->tt_ = LUA_TNIL;
             }
+            //将第一个返回结果的值存储到当前函数的位置，并将栈顶指针指向当前函数的下一个位置。
+            //setobj 函数用于将一个栈值复制到另一个栈值位置
             setobj(func, first_result);
             first_result->value_.p = NULL;
             first_result->tt_ = LUA_TNIL;
@@ -183,7 +219,7 @@ int luaD_poscall(struct lua_State* L, StkId first_result, int nresult) {
             L->top = func + nres;
         } break;
         default: {
-            if (nwant > nresult) {
+            if (nwant > nresult) {//期望的结果数量大于返回结果的数量,则将多余的返回结果设置为 nil 值
                 int i;
                 for (i = 0; i < nwant; i++) {
                     if (i < nresult) {
@@ -199,7 +235,7 @@ int luaD_poscall(struct lua_State* L, StkId first_result, int nresult) {
                 }
                 L->top = func + nwant;
             }
-            else {
+            else {//否则，将多余的期望结果设置为 nil 值，并将返回结果的值存储到当前函数的位置。
                 int i;
                 for (i = 0; i < nresult; i++) {
                     if (i < nwant) {
@@ -219,6 +255,7 @@ int luaD_poscall(struct lua_State* L, StkId first_result, int nresult) {
         } break;
     }
 
+    //最后，将当前 CallInfo 结构体弹出，并释放其内存。
     struct CallInfo* ci = L->ci;
     L->ci = ci->previous;
     L->ci->next = NULL;
