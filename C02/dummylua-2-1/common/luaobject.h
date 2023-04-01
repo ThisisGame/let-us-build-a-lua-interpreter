@@ -36,14 +36,15 @@ typedef void* (*lua_Alloc)(void* ud, void* ptr, size_t osize, size_t nsize);
 #define LUA_NUMFLT (LUA_TNUMBER | (1 << 4))
 
 // lua function type 
-#define LUA_TLCL (LUA_TFUNCTION | (0 << 4))
-#define LUA_TLCF (LUA_TFUNCTION | (1 << 4))
-#define LUA_TCCL (LUA_TFUNCTION | (2 << 4))
+#define LUA_TLCL (LUA_TFUNCTION | (0 << 4)) //标识 Lua 函数
+#define LUA_TLCF (LUA_TFUNCTION | (1 << 4)) //C 函数
+#define LUA_TCCL (LUA_TFUNCTION | (2 << 4)) //闭包函数
 
 // string type 
-#define LUA_LNGSTR (LUA_TSTRING | (0 << 4))
-#define LUA_SHRSTR (LUA_TSTRING | (1 << 4))
+#define LUA_LNGSTR (LUA_TSTRING | (0 << 4)) //长字符串
+#define LUA_SHRSTR (LUA_TSTRING | (1 << 4)) //短字符串
 
+//联合体类型，用于表示 Lua 中的任意值。
 typedef union lua_Value {
     void* p;
     int b;
@@ -52,6 +53,7 @@ typedef union lua_Value {
     lua_CFunction f;
 } Value;
 
+//结构体类型，用于表示 Lua 中的值类型和类型标记。
 typedef struct lua_TValue {
     Value value_;
     int tt_;
