@@ -171,14 +171,19 @@ void lua_pushlightuserdata(struct lua_State* L, void* p) {
     increase_top(L);
 }
 
+
+//在Lua虚拟机中，栈是一个连续的内存区域，每个栈元素（即一条指令或一个值）都被分配了一个索引（index），从1开始递增。
+//在函数调用时，栈上的前若干个元素被用来存储函数的参数，而剩余的元素则被用来存储函数的局部变量和中间结果。这些元素的索引从1开始递增，直到栈顶（top）。
+//因此，如果指定的栈索引位置idx大于等于0，表示该索引指向的值是当前函数调用的局部变量之一，其对应的TValue类型的指针可以通过该函数计算得到。
+//而如果索引位置idx小于0，则表示该索引指向的值是当前函数调用栈之外的值，其对应的TValue类型的指针也可以通过该函数计算得到。
 static TValue* index2addr(struct lua_State* L, int idx) {
-    if (idx >= 0) {
-        assert(L->ci->func + idx < L->ci->top);
+    if (idx >= 0) {//如果指定的栈索引位置idx大于等于0，表示该栈索引位置在当前函数调用的局部变量中。
+        assert(L->ci->func + idx < L->ci->top);//则根据当前的调用信息（ci）和指定的栈索引位置idx，计算出该局部变量的TValue类型的指针，并返回。
         return L->ci->func + idx;
     }
     else {
-        assert(L->top + idx > L->ci->func);
-        return L->top + idx;
+        assert(L->top + idx > L->ci->func);//指定的栈索引位置idx在当前函数调用的调用栈之外。
+        return L->top + idx;//则根据当前的栈顶（top）和指定的栈索引位置idx，计算出该位置的TValue类型的指针，并返回。
     }
 }
 
@@ -221,10 +226,16 @@ int lua_isnil(struct lua_State* L, int idx) {
     return addr->tt_ == LUA_TNIL;
 }
 
+//返回当前栈顶的索引，即栈中元素的数量。
 int lua_gettop(struct lua_State* L) {
     return cast(int, L->top - (L->ci->func + 1));
 }
 
+/**
+设置栈顶的位置
+@param L Lua 状态机指针
+@param idx 栈顶的目标位置 
+**/
 void lua_settop(struct lua_State* L, int idx) {
     StkId func = L->ci->func;
     if (idx >=0) {
@@ -240,6 +251,7 @@ void lua_settop(struct lua_State* L, int idx) {
     }
 }
 
+//弹出栈顶的一个元素，等价于 lua_settop(L, -1)。
 void lua_pop(struct lua_State* L) {
     lua_settop(L, -1);
 }

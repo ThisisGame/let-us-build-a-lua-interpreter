@@ -267,8 +267,16 @@ int luaD_poscall(struct lua_State* L, StkId first_result, int nresult) {
     return LUA_OK;
 }
 
+
+/**
+调用一个 Lua 函数
+@param L Lua 解释器的状态指针
+@param func 函数栈指针，指向要调用的函数
+@param nresult 期望的返回值数量
+@return 返回值为 LUA_OK，表示调用成功
+**/
 int luaD_call(struct lua_State* L, StkId func, int nresult) {
-    if (++L->ncalls > LUA_MAXCALLS) {
+    if (++L->ncalls > LUA_MAXCALLS) {//判断当前调用的层数是否已经超过了最大层数
         luaD_throw(L, 0);
     }
 
@@ -276,50 +284,55 @@ int luaD_call(struct lua_State* L, StkId func, int nresult) {
         // TODO luaV_execute(L);
     }
     
-    L->ncalls--;
+    L->ncalls--;//执行完毕后，更新当前调用层数，并返回 LUA_OK。
     return LUA_OK;
 }
 
+/**
+重置尚未使用的栈空间
+@param L Lua 解释器的状态指针
+@param old_top 旧栈顶的偏移量 
+**/
 static void reset_unuse_stack(struct lua_State* L, ptrdiff_t old_top) {
     struct global_State* g = G(L);
-    StkId top = restorestack(L, old_top);
-    for (; top < L->top; top++) {
-        if (top->value_.p) {
+    StkId top = restorestack(L, old_top);//调用 restorestack 函数，将栈顶位置恢复到 old_top。
+    for (; top < L->top; top++) {//遍历从 old_top 位置开始到当前栈顶位置（L->top）的所有栈空间
+        if (top->value_.p) {// 如果值为指针类型，调用全局状态的内存分配函数（g->frealloc）释放其内存空间，并将其指针值设为 NULL。
             (*g->frealloc)(g->ud, top->value_.p, sizeof(top->value_.p), 0);
             top->value_.p = NULL; 
         }
-        top->tt_ = LUA_TNIL;
+        top->tt_ = LUA_TNIL;//将该栈空间的类型设置为 LUA_TNIL。
     }
 }
 
 int luaD_pcall(struct lua_State* L, Pfunc f, void* ud, ptrdiff_t oldtop, ptrdiff_t ef) {
     int status;
-    struct CallInfo* old_ci = L->ci;
+    struct CallInfo* old_ci = L->ci;//保存当前的调用信息（ci）和错误处理函数（errorfunc）。
     ptrdiff_t old_errorfunc = L->errorfunc;    
     
-    status = luaD_rawrunprotected(L, f, ud);
-    if (status != LUA_OK) {
+    status = luaD_rawrunprotected(L, f, ud);//调用luaD_rawrunprotected函数执行待执行的函数 f，并返回执行状态。
+    if (status != LUA_OK) {//如果执行状态不是LUA_OK，说明执行过程中出现了错误，需要进行错误处理
         // because we have not implement gc, so we should free ci manually
         struct global_State* g = G(L);
         struct CallInfo* free_ci = L->ci;
         while(free_ci) {
-            if (free_ci == old_ci) {
+            if (free_ci == old_ci) {//如果当前的调用信息是调用luaD_pcall函数之前的调用信息（old_ci），则跳过该调用信息，继续遍历下一个调用信息。
                 free_ci = free_ci->next;
                 continue;
             }
 
-            struct CallInfo* previous = free_ci->previous;
+            struct CallInfo* previous = free_ci->previous;//否则，将当前调用信息的前一个调用信息（previous）的next指针置为NULL，以便将当前调用信息从链表中删除。
             previous->next = NULL;
             
-            struct CallInfo* next = free_ci->next;
-            (*g->frealloc)(g->ud, free_ci, sizeof(struct CallInfo), 0);
+            struct CallInfo* next = free_ci->next;//记录下一个调用信息（next），用于下一次循环遍历。
+            (*g->frealloc)(g->ud, free_ci, sizeof(struct CallInfo), 0);//调用free函数释放当前调用信息占用的内存空间。
             free_ci = next;
         }
         
-        reset_unuse_stack(L, oldtop);
-        L->ci = old_ci;
+        reset_unuse_stack(L, oldtop);//重置未使用的栈空间
+        L->ci = old_ci;//恢复调用信息（ci）
         L->top = restorestack(L, oldtop);
-        seterrobj(L, status);
+        seterrobj(L, status);//设置错误信息
     }
     
     L->errorfunc = old_errorfunc; 
