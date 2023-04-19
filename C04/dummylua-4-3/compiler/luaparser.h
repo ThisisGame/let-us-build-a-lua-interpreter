@@ -125,12 +125,16 @@ typedef struct Dyndata {
 	Labellist labellist;
 } Dyndata;
 
+/**
+ * @brief 定义 BlockCnt 结构体，用于记录块的活动变量、循环、标签等信息。
+ */
 typedef struct BlockCnt {
-	struct BlockCnt* previous;
-	lu_byte nactvar;
-	int is_loop;
-	int firstlabel;
+	struct BlockCnt* previous; /**< 前一个 BlockCnt 指针 */
+	lu_byte nactvar; /**< 活动变量个数 */
+	int is_loop; /**< 是否为循环块 */
+	int firstlabel; /**< 第一个标签（label）在代码数组中的位置 */
 } BlockCnt;
+
 
 typedef struct FuncState {
 	int firstlocal;
