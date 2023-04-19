@@ -44,21 +44,28 @@ typedef void* (*lua_Alloc)(void* ud, void* ptr, size_t osize, size_t nsize);
 #define LUA_LNGSTR (LUA_TSTRING | (0 << 4))
 #define LUA_SHRSTR (LUA_TSTRING | (1 << 4))
 
-// GCObject
+// GCObject 
+// next 是一个指针类型，指向链表中下一个对象
+// tt_ 表示 Lua 数据类型的标记位 
+// marked 则表示该对象是否已经被垃圾回收机制标记为可回收。
 #define CommonHeader struct GCObject* next; lu_byte tt_; lu_byte marked
+
+// 表示在执行完全部一轮垃圾回收后，再进行下一轮垃圾回收所需要的“步数”。
+// LUA_GCSTEPMUL 的值越大，表示 Lua 在进行 GC 时可以容忍更多未释放内存存在，从而减少 GC 的开销。
 #define LUA_GCSTEPMUL 200
 
 struct GCObject {
     CommonHeader;
 };
 
+/// @brief 定义了一个联合体 lua_Value，用于在 Lua 中表示不同的数据类型。
 typedef union lua_Value {
-    struct GCObject* gc;
-    void* p;
-    int b;
-    lua_Integer i;
-    lua_Number n;
-    lua_CFunction f;
+    struct GCObject* gc;//指向 Lua 中的垃圾回收对象结构体 GCObject
+    void* p;//指针类型，指向任意类型的指针数据。
+    int b;//一个整数类型，用于表示布尔类型数据。
+    lua_Integer i;//长整型类型
+    lua_Number n;//浮点型类型
+    lua_CFunction f;//函数指针类型，用于表示 C 函数类型数据。
 } Value;
 
 typedef struct lua_TValue {
