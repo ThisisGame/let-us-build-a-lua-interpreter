@@ -598,31 +598,50 @@ static void cond(struct lua_State* L, LexState* ls, FuncState* fs, expdesc* e) {
 	luaK_goiftrue(fs, e);
 }
 
+/**
+ * @brief 进入一个代码块，记录块的活动变量、循环、标签等信息。
+ *
+ * @param L lua_State 指针
+ * @param ls LexState 指针
+ * @param bl BlockCnt 指针，代表当前进入的代码块
+ * @param is_loop 是否为循环块
+ *
+ * @return void
+ */
 static void enterblock(struct lua_State* L, LexState* ls, BlockCnt* bl, int is_loop) {
-	FuncState* fs = ls->fs;
-	bl->nactvar = fs->nactvars;
-	bl->is_loop = is_loop;
-	bl->previous = fs->bl;
-	fs->bl = bl;
+	FuncState* fs = ls->fs; /**< 对应的函数状态 */
+	bl->nactvar = fs->nactvars; /**< 活动变量的数目 */
+	bl->is_loop = is_loop; /**< 是否为循环块 */
+	bl->previous = fs->bl; /**< 前一个代码块 */
+	fs->bl = bl; /**< 当前代码块 */
 
-	if (is_loop) {
-		bl->firstlabel = ls->dyd->labellist.n;
+	if (is_loop) { /**< 如果是循环块 */
+		bl->firstlabel = ls->dyd->labellist.n; /**< 记录第一个标签的位置 */
 	}
 	else {
-		bl->firstlabel = -1;
+		bl->firstlabel = -1; /**< 如果不是循环块，将第一个标签位置设为-1 */
 	}
 }
 
+
+/**
+ * @brief 在代码块中执行跳出操作，将控制流转移到对应的代码块结尾处
+ *
+ * @param L Lua解释器的指针
+ * @param ls 词法分析器的指针
+ * @param bl 当前代码块的指针
+ */
 static void breakjump(struct lua_State* L, LexState* ls, BlockCnt* bl) {
-	TString* breakstr = luaS_newliteral(L, "break");
-	for (int i = bl->firstlabel; i < ls->dyd->labellist.n; i++) {
+	TString* breakstr = luaS_newliteral(L, "break"); /**< 创建字符串常量"break" */
+	for (int i = bl->firstlabel; i < ls->dyd->labellist.n; i++) { /**< 遍历标签数组 */
 		Labeldesc* label = &ls->dyd->labellist.arr[i];
-		if (luaS_eqshrstr(L, label->varname, breakstr)) {
-			luaK_patchtohere(ls->fs, label->pc);
+		if (luaS_eqshrstr(L, label->varname, breakstr)) { /**< 如果找到了与"break"相同的标签名 */
+			luaK_patchtohere(ls->fs, label->pc); /**< 给当前指令补充跳转地址 */
 		}
 	}
-	ls->dyd->labellist.n = bl->firstlabel;
+	ls->dyd->labellist.n = bl->firstlabel; /**< 将解析器中记录的标签数目重设为当前代码块第一个标签的位置 */
 }
+
 
 static void leaveblock(struct lua_State* L, LexState* ls) {
 	FuncState* fs = ls->fs;
