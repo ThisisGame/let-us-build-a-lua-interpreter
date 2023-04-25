@@ -43,16 +43,30 @@ void test_internal(struct lua_State* L, const char* str, int is_variant) {
     }
 }
 
+/**
+ * @brief 测试字符串缓存
+ *
+ * @param L Lua状态机指针
+ * @param is_same_str 是否使用相同字符串
+ */
 void test_string_cache(struct lua_State* L, int is_same_str) {
+
     printf("test_string_cache\n");
+
+    // 初始化前一个TString指针为NULL
     struct TString* previous_ts = NULL;
+
     for (int i = 0; i < 5; i ++) {
+
+        // 声明新的TString指针变量
         struct TString* ts = NULL;
-    
+
         if (is_same_str) {
+            // 如果需要使用相同字符串，则调用luaS_new函数创建TString结构体
             ts = luaS_new(L, g_lngstr, strlen(g_lngstr));
         }
         else {
+            // 否则，先申请内存，再使用sprintf函数向buff数组中写入内容，最后调用luaS_new函数创建TString结构体
             char* buff = (char*)malloc(256);
             printf("buff addr %x \n", (unsigned int)(size_t)buff);
             sprintf(buff, "%s", g_lngstr);
@@ -60,15 +74,19 @@ void test_string_cache(struct lua_State* L, int is_same_str) {
             free(buff);
         }
 
+        // 比较前后两个TString指针是否相同
         if (previous_ts == ts) {
             printf("string cache is same \n");
         }
         else {
             printf("string cache is not same \n");
         }
+
+        // 将当前TString指针赋值给前一个TString指针变量
         previous_ts = ts;
     }
 }
+
 
 void test_gc(struct lua_State* L) {
    int start_time = time(NULL);

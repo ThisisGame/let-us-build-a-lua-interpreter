@@ -26,36 +26,50 @@ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 
 #define MEMERRMSG "not enough memory"
 
+/**
+ * @brief Initializes the string cache of a Lua state.
+ * 
+ * @param L Pointer to the Lua state
+ */
 void luaS_init(struct lua_State* L) {
     struct global_State* g = G(L);
-    g->strt.nuse = 0;
-    g->strt.size = 0;
-    g->strt.hash = NULL;
-    luaS_resize(L, MINSTRTABLESIZE);
+    g->strt.nuse = 0; // 初始化全局状态机中保存字符串的数量
+    g->strt.size = 0; // 字符串缓存区大小初始化为0，后续会动态增加
+    g->strt.hash = NULL; // 哈希表指针初始化为NULL
+    luaS_resize(L, MINSTRTABLESIZE); // 初始化并调整字符串缓存区空间
+    // 创建内存错误提示信息和将其添加至垃圾收集器根节点
     g->memerrmsg = luaS_newlstr(L, MEMERRMSG, strlen(MEMERRMSG)); 
     luaC_fix(L, obj2gco(g->memerrmsg));
 
     // strcache table can not hold the string objects which will be sweep soon
-    for (int i = 0; i < STRCACHE_M; i ++) {
-        for (int j = 0; j < STRCACHE_N; j ++)
-            g->strcache[i][j] = g->memerrmsg;
+    for (int i = 0; i < STRCACHE_M; i ++) { // 遍历每一个字符串缓存槽位
+        for (int j = 0; j < STRCACHE_N; j ++) // 每个槽位中可能有多个对象，因此需要再次遍历
+            g->strcache[i][j] = g->memerrmsg; // 将内存错误提示信息加入该槽位
     }
 }
 
-// attention please, luaS_resize is use for resize stringtable type,
-// which is only use by short string. The second argument usually must 
-// be 2 ^ n
+
+/**
+ * @brief 这个函数是用来改变字符串表stringtable的大小，仅被短字符串使用。
+ *        通常第二个参数必须是2的幂。
+ *
+ * @param L lua_State 状态机指针
+ * @param nsize unsigned int 新的字符串表大小
+ * 
+ * @return unsigned int 返回新的字符串表大小
+ */
 int luaS_resize(struct lua_State* L, unsigned int nsize) {
     struct global_State* g = G(L);
     unsigned int osize = g->strt.size;
     if (nsize > osize) {
+        // 重新分配hash表内存空间，并将新增的部分置为NULL
         luaM_reallocvector(L, g->strt.hash, osize, nsize, TString*);
         for (int i = osize; i < nsize; i ++) {
             g->strt.hash[i] = NULL;
         }
     }
 
-    // all TString value will be rehash by nsize
+    // 重新hash所有TString值到新的nsize上
     for (int i = 0; i < g->strt.size; i ++) {
        struct TString* ts = g->strt.hash[i];
        g->strt.hash[i] = NULL;
@@ -69,8 +83,9 @@ int luaS_resize(struct lua_State* L, unsigned int nsize) {
        }
     }
 
-    // shrink string hash table 
+    // 如果新的字符串表大小小于原始大小，则缩小字符串哈希表。
     if (nsize < osize) {
+        // 为了避免删除关键字符串，我们需要确保结束范围内的桶为空。
         lua_assert(g->strt.hash[nsize] == NULL && g->strt.hash[osize - 1] == NULL);
         luaM_reallocvector(L, g->strt.hash, osize, nsize, TString*);
     }
@@ -78,6 +93,7 @@ int luaS_resize(struct lua_State* L, unsigned int nsize) {
 
     return g->strt.size;
 }
+
 
 static struct TString* createstrobj(struct lua_State* L, const char* str, int tag, unsigned int l, unsigned int hash) {
     size_t total_size = sizelstring(l);
